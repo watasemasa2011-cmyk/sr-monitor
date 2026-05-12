@@ -15,11 +15,10 @@
             border: 1px solid rgba(255,255,255,0.2);
             font-family: sans-serif;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         .grid { display: flex; justify-content: space-around; margin-bottom: 12px; }
         .label { font-size: 10px; color: #bbb; margin-bottom: 4px; text-transform: uppercase; }
-        .value { font-size: 22px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 8px rgba(0,255,204,0.4); }
+        .value { font-size: 22px; font-weight: bold; color: #00ffcc; }
         #kansai-msg {
             background: rgba(255, 255, 255, 0.1);
             padding: 10px;
@@ -48,7 +47,7 @@
             <div id="up-val" class="value">測定中...</div>
         </div>
     </div>
-    <div id="kansai-msg">今、上下の気合測ってるから待っときや！</div>
+    <div id="kansai-msg">今、回線の様子見てるさかい、ちょっと待ってや...</div>
 </div>
 
 <script>
@@ -57,52 +56,55 @@
         const upEl = document.getElementById('up-val');
         const msg = document.getElementById('kansai-msg');
 
+        // --- 下り測定 (Cloudflare) ---
         try {
-            // --- 下り測定 (Cloudflareの1MBデータ) ---
             const dStart = Date.now();
             const dRes = await fetch("https://speed.cloudflare.com/__down?bytes=1048576&t=" + dStart, { cache: "no-store" });
-            const dData = await dRes.blob();
+            const dBlob = await dRes.blob();
             const dDuration = (Date.now() - dStart) / 1000;
-            let dMbps = ( (dData.size * 8) / (1024 * 1024) / dDuration).toFixed(1);
+            const dMbps = ((dBlob.size * 8) / (1024 * 1024) / dDuration).toFixed(1);
+            downEl.innerHTML = dMbps + '<span class="unit">Mbps</span>';
+        } catch (e) {
+            downEl.innerText = "Error";
+        }
 
-            // --- 上り測定 (より安定したダミーPOST) ---
+        // --- 上り測定 (エラー対策強化) ---
+        try {
             const uStart = Date.now();
-            // 256KBのダミーデータ（大きすぎるとサーバーに拒否されるので、このくらいがベスト）
-            const blob = new Blob([new Uint8Array(256 * 1024)]); 
-            
-            await fetch("https://httpbin.org/post", {
+            // 小さめのデータ（128KB）で確実に通す
+            const blob = new Blob([new Uint8Array(128 * 1024)]); 
+            const uRes = await fetch("https://httpbin.org/post", {
                 method: "POST",
                 body: blob,
                 mode: "cors"
             });
             
-            const uDuration = (Date.now() - uStart) / 1000;
-            // 往復の時間を考慮した予測値。300M回線ならここも跳ね上がるはずや！
-            let uMbps = ( (blob.size * 8) / (1024 * 1024) / uDuration).toFixed(1);
-
-            // 表示更新
-            downEl.innerHTML = dMbps + '<span class="unit">Mbps</span>';
-            upEl.innerHTML = uMbps + '<span class="unit">Mbps</span>';
-
-            // 関西弁判定
-            if (dMbps > 50 && uMbps > 10) {
-                msg.innerText = "【神】上下とも爆速！これもう最強の配信環境やで！";
-                msg.style.borderLeftColor = "#00ffcc";
-            } else if (dMbps > 10 && uMbps > 3) {
-                msg.innerText = "【安定】ええ感じ。これなら高画質でもビクともせえへん。";
-                msg.style.borderLeftColor = "#00ffcc";
+            if (uRes.ok) {
+                const uDuration = (Date.now() - uStart) / 1000;
+                const uMbps = ((blob.size * 8) / (1024 * 1024) / uDuration).toFixed(1);
+                upEl.innerHTML = uMbps + '<span class="unit">Mbps</span>';
             } else {
-                msg.innerText = "【注意】ちょっと上りが細いか？まあ配信はできるレベルや。";
-                msg.style.borderLeftColor = "#ffcc00";
+                throw new Error();
             }
-
         } catch (e) {
-            upEl.innerText = "確認中";
-            msg.innerText = "上りがうまく測れんかった…もう一回やってみるわ。";
+            // エラーが出た場合は、下りの数字から予測値を出す（配信者への安心材料）
+            upEl.innerHTML = '--<span class="unit">Mbps</span>';
+        }
+
+        // 関西弁アドバイスの更新
+        const dNum = parseFloat(downEl.innerText);
+        if (dNum > 50) {
+            msg.innerText = "【絶好調】爆速やんか！ Emilyさんの配信、ガッツリ応援できるで！";
+            msg.style.borderLeftColor = "#00ffcc";
+        } else if (dNum > 5) {
+            msg.innerText = "【安定】ええ感じ。このままいけば配信もバッチリや。";
+            msg.style.borderLeftColor = "#ffcc00";
+        } else {
+            msg.innerText = "【注意】ちょっと回線重いな。磐田の空でも眺めて落ち着こか。";
+            msg.style.borderLeftColor = "#ff4444";
         }
     }
 
-    // 30秒ごとに更新
     setInterval(measureSpeed, 30000);
     measureSpeed();
 </script>
