@@ -2,54 +2,30 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>SHOWROOM配信監視くん</title>
+    <title>本気・速度モニター</title>
     <style>
-        /* 背景を完全に透明にするおまじない */
         html, body { background: transparent; margin: 0; padding: 0; overflow: hidden; }
-        
         #monitor {
-            background: rgba(20, 20, 20, 0.7); /* スケスケの黒 */
-            backdrop-filter: blur(8px); /* 背景ぼかし */
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(10px);
             color: white;
             padding: 15px;
-            border-radius: 20px;
-            width: 260px;
+            border-radius: 18px;
+            width: 240px;
             border: 1px solid rgba(255,255,255,0.2);
-            font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
+            font-family: sans-serif;
             text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
         }
-
         .grid { display: flex; justify-content: space-around; margin-bottom: 10px; }
         .label { font-size: 10px; color: #aaa; margin-bottom: 2px; }
-        .value { font-size: 18px; font-weight: bold; }
-        
-        /* 速度の色 */
-        .good { color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
-        .bad { color: #ff4444; text-shadow: 0 0 10px #ff4444; }
-
+        .value { font-size: 24px; font-weight: bold; color: #00ffcc; }
         #kansai-msg {
             background: rgba(255, 255, 255, 0.1);
             padding: 8px;
             border-radius: 10px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
-            min-height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-left: 5px solid #ffcc00;
-        }
-
-        button {
-            margin-top: 10px;
-            background: none;
-            border: 1px solid #666;
-            color: #ccc;
-            font-size: 10px;
-            padding: 3px 10px;
-            border-radius: 5px;
-            cursor: pointer;
+            border-left: 5px solid #00ffcc;
         }
     </style>
 </head>
@@ -58,86 +34,65 @@
 <div id="monitor">
     <div class="grid">
         <div>
-            <div class="label">下り(DOWN)</div>
-            <div id="down-val" class="value">測定中...</div>
-        </div>
-        <div>
-            <div class="label">上り(UP予測)</div>
-            <div id="up-val" class="value">測定中...</div>
+            <div class="label">下り実測 (Down)</div>
+            <div id="down-val" class="value">測定中</div>
         </div>
     </div>
-
-    <div id="kansai-msg">回線の様子見てるさかい、ちょっと待ってや...</div>
-
-    <div class="grid" style="margin-top:10px; border-top:1px solid #444; padding-top:5px;">
-        <div>
-            <div class="label">メモリ</div>
-            <div id="mem-val" style="font-size:12px;">-- MB</div>
-        </div>
-        <button onclick="optimize()">メモリ掃除</button>
+    <div id="kansai-msg">本気で回線測ってるさかい、ちょっと待ってや...</div>
+    <div style="font-size: 9px; color: #666; margin-top: 8px;">
+        ※10MBのデータでガチ測定中（1分ごと）
     </div>
 </div>
 
 <script>
-    async function checkNetwork() {
-        const msg = document.getElementById('kansai-msg');
+    async function measureRealSpeed() {
         const downEl = document.getElementById('down-val');
-        const upEl = document.getElementById('up-val');
+        const msg = document.getElementById('kansai-msg');
+
+        // 測定用ファイル：GitHubなどが提供している大きめのバイナリデータ（約10MB）
+        // ここでは、キャッシュの影響を受けにくい大きな画像や公開ファイルを利用
+        const testFile = "https://speed.cloudflare.com/__down?bytes=10000000"; // 10MBのダミーデータ
         
-        const start = Date.now();
+        const startTime = Date.now();
         try {
-            // 下り測定
-            const res = await fetch("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png?t=" + start, {mode:'no-cors'});
-            const duration = (Date.now() - start) / 1000;
-            const downMbps = (0.1 / duration).toFixed(2); // 簡易計算
+            const response = await fetch(testFile, { cache: "no-store" });
+            const reader = response.body.getReader();
+            let receivedLength = 0;
             
-            downEl.innerText = downMbps + " Mbps";
-            downEl.className = downMbps > 5 ? "value good" : "value bad";
-
-            // 上り測定（ブラウザの制限があるため、下りから推測しつつダミーPOST）
-            // 実際の上りに近い負荷をかける
-            const upStart = Date.now();
-            await fetch('https://httpbin.org/post', {
-                method: 'POST',
-                body: new Array(100000).join('a') // 約100KB送る
-            });
-            const upDuration = (Date.now() - upStart) / 1000;
-            const upMbps = (0.8 / upDuration).toFixed(2);
-            
-            upEl.innerText = upMbps + " Mbps";
-            upEl.className = upMbps > 2 ? "value good" : "value bad";
-
-            // 関西弁判定
-            if (upMbps > 3 && downMbps > 10) {
-                msg.innerText = "【絶好調】爆速や！ギフト投げまくられても止まらんで！";
-                msg.style.borderLeftColor = "#00ffcc";
-            } else if (upMbps > 1.5) {
-                msg.innerText = "【標準】ええ感じ。これなら配信しても大丈夫やわ。";
-                msg.style.borderLeftColor = "#ffcc00";
-            } else {
-                msg.innerText = "【激ヤバ】回線ヘロヘロや！配信止まるかもしれん…";
-                msg.style.borderLeftColor = "#ff4444";
+            // データを実際に読み込む
+            while(true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                receivedLength += value.length;
             }
 
-        } catch(e) {
-            msg.innerText = "ネット繋がってへんみたいやで？";
+            const endTime = Date.now();
+            const duration = (endTime - startTime) / 1000; // 秒
+            const bitsLoaded = receivedLength * 8;
+            const speedMbps = (bitsLoaded / duration / (1024 * 1024)).toFixed(1);
+
+            downEl.innerText = speedMbps + " Mbps";
+
+            if (speedMbps > 100) {
+                msg.innerText = "【神回線】" + speedMbps + "Mも出とる！磐田で一番速いんちゃうか！？";
+                msg.style.borderLeftColor = "#00ffcc";
+            } else if (speedMbps > 20) {
+                msg.innerText = "【絶好調】これだけ出れば配信も余裕のよっちゃんで！";
+                msg.style.borderLeftColor = "#00ffcc";
+            } else {
+                msg.innerText = "【普通】まあまあやな。配信には十分やで。";
+                msg.style.borderLeftColor = "#ffcc00";
+            }
+
+        } catch (e) {
+            downEl.innerText = "Error";
+            msg.innerText = "測定失敗や。ネット繋がっとるか？";
         }
     }
 
-    function updateMem() {
-        if(performance.memory) {
-            document.getElementById('mem-val').innerText = (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + " MB";
-        }
-    }
-
-    function optimize() {
-        alert("ブラウザに掃除頼んどいたで！");　
-    }
-
-    setInterval(checkNetwork, 20000);
-    setInterval(updateMem, 2000);
-    checkNetwork();
-    updateMem();
+    // 重いデータをやり取りするので、測定間隔は「1分に1回」にしておくわ（配信の邪魔にならんように）
+    setInterval(measureRealSpeed, 60000);
+    measureRealSpeed();
 </script>
 </body>
 </html>
