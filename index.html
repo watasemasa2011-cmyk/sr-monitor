@@ -15,6 +15,7 @@
             border: 1px solid rgba(255,255,255,0.2);
             font-family: sans-serif;
             text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         .grid { display: flex; justify-content: space-around; margin-bottom: 12px; }
         .label { font-size: 10px; color: #bbb; margin-bottom: 4px; text-transform: uppercase; }
@@ -56,7 +57,7 @@
         const upEl = document.getElementById('up-val');
         const msg = document.getElementById('kansai-msg');
 
-        // --- 下り測定 (Cloudflare) ---
+        // 下り測定
         try {
             const dStart = Date.now();
             const dRes = await fetch("https://speed.cloudflare.com/__down?bytes=1048576&t=" + dStart, { cache: "no-store" });
@@ -68,10 +69,9 @@
             downEl.innerText = "Error";
         }
 
-        // --- 上り測定 (エラー対策強化) ---
+        // 上り測定
         try {
             const uStart = Date.now();
-            // 小さめのデータ（128KB）で確実に通す
             const blob = new Blob([new Uint8Array(128 * 1024)]); 
             const uRes = await fetch("https://httpbin.org/post", {
                 method: "POST",
@@ -84,14 +84,13 @@
                 const uMbps = ((blob.size * 8) / (1024 * 1024) / uDuration).toFixed(1);
                 upEl.innerHTML = uMbps + '<span class="unit">Mbps</span>';
             } else {
-                throw new Error();
+                upEl.innerHTML = '--<span class="unit">Mbps</span>';
             }
         } catch (e) {
-            // エラーが出た場合は、下りの数字から予測値を出す（配信者への安心材料）
             upEl.innerHTML = '--<span class="unit">Mbps</span>';
         }
 
-        // 関西弁アドバイスの更新
+        // 判定メッセージ更新
         const dNum = parseFloat(downEl.innerText);
         if (dNum > 50) {
             msg.innerText = "【絶好調】爆速やんか！ Emilyさんの配信、ガッツリ応援できるで！";
@@ -105,8 +104,9 @@
         }
     }
 
-    setInterval(measureSpeed, 30000);
+    // 初回実行と30秒ごとの更新
     measureSpeed();
+    setInterval(measureSpeed, 30000);
 </script>
 </body>
 </html>
