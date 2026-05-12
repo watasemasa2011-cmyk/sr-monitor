@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHOWROOM透過モニター</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            /* bodyの背景は透明に */
+            background-color: transparent;
+            color: #ffffff;
+            font-family: sans-serif;
+            overflow: hidden; /* スクロールバーを出さない */
+        }
+        #monitor {
+            /* モニター全体の背景を「半透明の黒」にして文字を見やすく */
+            background: rgba(0, 0, 0, 0.5);
+            /* 少しぼかしを入れると、後ろの配信画面となじんでオシャレやで */
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            width: 240px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .section {
+            margin-bottom: 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .label {
+            font-size: 10px;
+            color: #ccc;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .value {
+            font-size: 22px;
+            font-weight: bold;
+            /* 文字には影をつけて、白い背景の上でも読めるようにするで */
+            text-shadow: 2px 2px 2px rgba(0,0,0,0.8);
+        }
+        /* 速度によって文字の色を変える */
+        .speed-good { color: #00ffcc; }
+        .speed-bad { color: #ff4444; }
+
+        #mem-val {
+            color: #ddd; /* メモリは少し控えめな色に */
+        }
+        
+        button { 
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 4px; 
+            cursor: pointer;
+            font-size: 10px;
+            transition: 0.2s;
+            width: 100%;
+            margin-top: 5px;
+        }
+        button:hover { background: rgba(255, 255, 255, 0.2); color: white; }
+    </style>
+</head>
+<body>
+
+<div id="monitor">
+    <!-- ネット速度セクション -->
+    <div class="section">
+        <div class="label">Net Speed</div>
+        <div class="value speed-good" id="speed-val">-- Mbps</div>
+    </div>
+
+    <!-- メモリセクション -->
+    <div class="section" style="border:none; margin:0; padding:0;">
+        <div class="label">Tool Memory</div>
+        <div class="value" id="mem-val" style="font-size: 16px;">-- MB</div>
+    </div>
+
+    <!-- 最適化ボタンも少し控えめに -->
+    <button onclick="optimizeMemory()">Memory Optimize</button>
+</div>
+
+<script>
+    // --- ネット速度測定 ---
+    async function measureSpeed() {
+        const speedValEl = document.getElementById('speed-val');
+        // Googleのロゴを利用（キャッシュ回避のクエリ付き）
+        const testUrl = "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png?cache=" + Date.now();
+        const startTime = Date.now();
+
+        try {
+            // mode: 'no-cors' で他ドメインの画像も軽量に取得
+            await fetch(testUrl, { mode: 'no-cors' });
+            const endTime = Date.now();
+            const duration = (endTime - startTime) / 1000; // 秒
+
+            // ファイルサイズはおよそ 13,000 バイト（104,000 ビット）
+            const mbps = ((104000) / duration / (1024 * 1024)).toFixed(2);
+
+            speedValEl.innerText = mbps + " Mbps";
+
+            // 5Mbpsを基準に色を変えるわ
+            if (mbps > 5) {
+                speedValEl.className = "value speed-good";
+            } else {
+                speedValEl.className = "value speed-bad";
+            }
+        } catch (e) {
+            speedValEl.innerText = "Error";
+            speedValEl.className = "value speed-bad";
+        }
+    }
+
+    // --- メモリ使用量表示 ---
+    function updateMemory() {
+        const memValEl = document.getElementById('mem-val');
+        if (performance.memory) {
+            // MB単位に換算して表示
+            const usedMem = (performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+            memValEl.innerText = usedMem + " MB";
+        } else {
+            memValEl.innerText = "N/A"; // Safariなど非対応ブラウザ用
+        }
+    }
+
+    // --- メモリ最適化（気休め） ---
+    function optimizeMemory() {
+        // 擬似的なゴミデータを作って捨てることで、ブラウザの掃除（GC）を促す
+        let junk = new Array(1000000).fill("A");
+        junk = null; 
+        
+        // 1秒後にメモリ表示を更新
+        setTimeout(updateMemory, 1000);
+    }
+
+    // --- タイマー設定 ---
+    // 速度測定は負荷を考えて30秒ごと
+    setInterval(measureSpeed, 30000);
+    // メモリ表示はリアルタイム感を出すために3秒ごと
+    setInterval(updateMemory, 3000);
+
+    // --- 初回実行 ---
+    measureSpeed();
+    updateMemory();
+</script>
+
+</body>
+</html>
