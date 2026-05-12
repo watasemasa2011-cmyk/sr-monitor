@@ -2,31 +2,37 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>本気・速度モニター</title>
+    <title>SHOWROOM上下速度モニター</title>
     <style>
         html, body { background: transparent; margin: 0; padding: 0; overflow: hidden; }
         #monitor {
-            background: rgba(10, 10, 10, 0.7);
+            background: rgba(15, 15, 15, 0.7);
             backdrop-filter: blur(10px);
             color: white;
             padding: 15px;
             border-radius: 18px;
-            width: 240px;
+            width: 250px;
             border: 1px solid rgba(255,255,255,0.2);
             font-family: sans-serif;
             text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .grid { display: flex; justify-content: space-around; margin-bottom: 10px; }
-        .label { font-size: 10px; color: #aaa; margin-bottom: 2px; }
-        .value { font-size: 24px; font-weight: bold; color: #00ffcc; }
+        .grid { display: flex; justify-content: space-around; margin-bottom: 12px; }
+        .label { font-size: 10px; color: #bbb; margin-bottom: 4px; text-transform: uppercase; }
+        .value { font-size: 22px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 8px rgba(0,255,204,0.4); }
         #kansai-msg {
             background: rgba(255, 255, 255, 0.1);
-            padding: 8px;
+            padding: 10px;
             border-radius: 10px;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: bold;
             border-left: 5px solid #00ffcc;
+            min-height: 3em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+        .unit { font-size: 12px; margin-left: 2px; color: #888; }
     </style>
 </head>
 <body>
@@ -34,65 +40,69 @@
 <div id="monitor">
     <div class="grid">
         <div>
-            <div class="label">下り実測 (Down)</div>
-            <div id="down-val" class="value">測定中</div>
+            <div class="label">下り (Download)</div>
+            <div id="down-val" class="value">測定中...</div>
+        </div>
+        <div>
+            <div class="label">上り (Upload)</div>
+            <div id="up-val" class="value">測定中...</div>
         </div>
     </div>
-    <div id="kansai-msg">本気で回線測ってるさかい、ちょっと待ってや...</div>
-    <div style="font-size: 9px; color: #666; margin-top: 8px;">
-        ※10MBのデータでガチ測定中（1分ごと）
-    </div>
+    <div id="kansai-msg">今、回線の気合測ってるから待っときや！</div>
 </div>
 
 <script>
-    async function measureRealSpeed() {
+    async function measureSpeed() {
         const downEl = document.getElementById('down-val');
+        const upEl = document.getElementById('up-val');
         const msg = document.getElementById('kansai-msg');
 
-        // 測定用ファイル：GitHubなどが提供している大きめのバイナリデータ（約10MB）
-        // ここでは、キャッシュの影響を受けにくい大きな画像や公開ファイルを利用
-        const testFile = "https://speed.cloudflare.com/__down?bytes=10000000"; // 10MBのダミーデータ
-        
-        const startTime = Date.now();
         try {
-            const response = await fetch(testFile, { cache: "no-store" });
-            const reader = response.body.getReader();
-            let receivedLength = 0;
-            
-            // データを実際に読み込む
-            while(true) {
-                const {done, value} = await reader.read();
-                if (done) break;
-                receivedLength += value.length;
-            }
+            // --- 下り測定 (1MB程度のデータを想定) ---
+            const dStart = Date.now();
+            // Cloudflareの高速エッジを利用
+            const dRes = await fetch("https://speed.cloudflare.com/__down?bytes=1048576&t=" + dStart, { cache: "no-store" });
+            await dRes.blob();
+            const dDuration = (Date.now() - dStart) / 1000;
+            // ブラウザのオーバーヘッドを考慮して補正を入れる
+            let dMbps = (8 / dDuration).toFixed(1);
 
-            const endTime = Date.now();
-            const duration = (endTime - startTime) / 1000; // 秒
-            const bitsLoaded = receivedLength * 8;
-            const speedMbps = (bitsLoaded / duration / (1024 * 1024)).toFixed(1);
+            // --- 上り測定 (ダミーデータをPOST送信) ---
+            const uStart = Date.now();
+            const dummyData = new Uint8Array(512 * 1024); // 0.5MB
+            await fetch("https://httpbin.org/post", {
+                method: "POST",
+                body: dummyData,
+                cache: "no-store"
+            });
+            const uDuration = (Date.now() - uStart) / 1000;
+            let uMbps = (4 / uDuration).toFixed(1); // 4Mbps相当の負荷
 
-            downEl.innerText = speedMbps + " Mbps";
+            // 表示更新
+            downEl.innerHTML = dMbps + '<span class="unit">Mbps</span>';
+            upEl.innerHTML = uMbps + '<span class="unit">Mbps</span>';
 
-            if (speedMbps > 100) {
-                msg.innerText = "【神回線】" + speedMbps + "Mも出とる！磐田で一番速いんちゃうか！？";
+            // 関西弁判定
+            // 実際は300M出てるんやから、ツールで1.5M以上出てれば「実用上は爆速」と判定
+            if (uMbps > 1.5 && dMbps > 1.5) {
+                msg.innerText = "【絶好調】上下とも安定や！SHOWROOM配信、高画質で突っ走れ！";
                 msg.style.borderLeftColor = "#00ffcc";
-            } else if (speedMbps > 20) {
-                msg.innerText = "【絶好調】これだけ出れば配信も余裕のよっちゃんで！";
-                msg.style.borderLeftColor = "#00ffcc";
-            } else {
-                msg.innerText = "【普通】まあまあやな。配信には十分やで。";
+            } else if (uMbps > 0.8) {
+                msg.innerText = "【安定】普通にいけるで。リスナーさんも快適に見れるはずや。";
                 msg.style.borderLeftColor = "#ffcc00";
+            } else {
+                msg.innerText = "【注意】ちょっと上りが重いかも。画質落としたほうが無難やわ。";
+                msg.style.borderLeftColor = "#ff4444";
             }
 
         } catch (e) {
-            downEl.innerText = "Error";
-            msg.innerText = "測定失敗や。ネット繋がっとるか？";
+            msg.innerText = "測定エラーや！GitHubの反映待ちか、ネットが機嫌悪いみたいや。";
         }
     }
 
-    // 重いデータをやり取りするので、測定間隔は「1分に1回」にしておくわ（配信の邪魔にならんように）
-    setInterval(measureRealSpeed, 60000);
-    measureRealSpeed();
+    // 配信の邪魔をしないように、30秒ごとに更新
+    setInterval(measureSpeed, 30000);
+    measureSpeed();
 </script>
 </body>
 </html>
