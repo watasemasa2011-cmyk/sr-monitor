@@ -48,7 +48,7 @@
             <div id="up-val" class="value">測定中...</div>
         </div>
     </div>
-    <div id="kansai-msg">今、回線の気合測ってるから待っときや！</div>
+    <div id="kansai-msg">今、上下の気合測ってるから待っときや！</div>
 </div>
 
 <script>
@@ -58,49 +58,51 @@
         const msg = document.getElementById('kansai-msg');
 
         try {
-            // --- 下り測定 (1MB程度のデータを想定) ---
+            // --- 下り測定 (Cloudflareの1MBデータ) ---
             const dStart = Date.now();
-            // Cloudflareの高速エッジを利用
             const dRes = await fetch("https://speed.cloudflare.com/__down?bytes=1048576&t=" + dStart, { cache: "no-store" });
-            await dRes.blob();
+            const dData = await dRes.blob();
             const dDuration = (Date.now() - dStart) / 1000;
-            // ブラウザのオーバーヘッドを考慮して補正を入れる
-            let dMbps = (8 / dDuration).toFixed(1);
+            let dMbps = ( (dData.size * 8) / (1024 * 1024) / dDuration).toFixed(1);
 
-            // --- 上り測定 (ダミーデータをPOST送信) ---
+            // --- 上り測定 (より安定したダミーPOST) ---
             const uStart = Date.now();
-            const dummyData = new Uint8Array(512 * 1024); // 0.5MB
+            // 256KBのダミーデータ（大きすぎるとサーバーに拒否されるので、このくらいがベスト）
+            const blob = new Blob([new Uint8Array(256 * 1024)]); 
+            
             await fetch("https://httpbin.org/post", {
                 method: "POST",
-                body: dummyData,
-                cache: "no-store"
+                body: blob,
+                mode: "cors"
             });
+            
             const uDuration = (Date.now() - uStart) / 1000;
-            let uMbps = (4 / uDuration).toFixed(1); // 4Mbps相当の負荷
+            // 往復の時間を考慮した予測値。300M回線ならここも跳ね上がるはずや！
+            let uMbps = ( (blob.size * 8) / (1024 * 1024) / uDuration).toFixed(1);
 
             // 表示更新
             downEl.innerHTML = dMbps + '<span class="unit">Mbps</span>';
             upEl.innerHTML = uMbps + '<span class="unit">Mbps</span>';
 
             // 関西弁判定
-            // 実際は300M出てるんやから、ツールで1.5M以上出てれば「実用上は爆速」と判定
-            if (uMbps > 1.5 && dMbps > 1.5) {
-                msg.innerText = "【絶好調】上下とも安定や！SHOWROOM配信、高画質で突っ走れ！";
+            if (dMbps > 50 && uMbps > 10) {
+                msg.innerText = "【神】上下とも爆速！これもう最強の配信環境やで！";
                 msg.style.borderLeftColor = "#00ffcc";
-            } else if (uMbps > 0.8) {
-                msg.innerText = "【安定】普通にいけるで。リスナーさんも快適に見れるはずや。";
-                msg.style.borderLeftColor = "#ffcc00";
+            } else if (dMbps > 10 && uMbps > 3) {
+                msg.innerText = "【安定】ええ感じ。これなら高画質でもビクともせえへん。";
+                msg.style.borderLeftColor = "#00ffcc";
             } else {
-                msg.innerText = "【注意】ちょっと上りが重いかも。画質落としたほうが無難やわ。";
-                msg.style.borderLeftColor = "#ff4444";
+                msg.innerText = "【注意】ちょっと上りが細いか？まあ配信はできるレベルや。";
+                msg.style.borderLeftColor = "#ffcc00";
             }
 
         } catch (e) {
-            msg.innerText = "測定エラーや！GitHubの反映待ちか、ネットが機嫌悪いみたいや。";
+            upEl.innerText = "確認中";
+            msg.innerText = "上りがうまく測れんかった…もう一回やってみるわ。";
         }
     }
 
-    // 配信の邪魔をしないように、30秒ごとに更新
+    // 30秒ごとに更新
     setInterval(measureSpeed, 30000);
     measureSpeed();
 </script>
